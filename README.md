@@ -10,67 +10,69 @@ This simulator walks students through **5 guided scenarios** that build on each 
 
 | Mode | Topic | What You Learn |
 |------|-------|---------------|
-| 1️⃣ Simple DEX | AMM basics | Pool creation, constant-product formula, price impact, LP fees |
-| 2️⃣ Sandwich Attack | MEV exploitation | How front-running + back-running extracts value from victims |
-| 3️⃣ Commit-Reveal | Defense layer 1 | Hiding trade details to prevent sandwich attacks |
-| 4️⃣ Last Revealer | Commit-Reveal flaw | Information asymmetry in sequential reveal |
-| 5️⃣ Threshold Encryption | Defense layer 2 | Batch execution eliminates ordering advantages |
-| 6️⃣ Free Mode | Open sandbox | Full DEX operations without guided steps |
+| 1. Simple DEX | AMM basics | Pool creation, constant-product formula, price impact, LP fees |
+| 2. Sandwich Attack | MEV exploitation | How front-running + back-running extracts value from victims |
+| 3. Commit-Reveal | Defense layer 1 | Hiding trade details to prevent sandwich attacks |
+| 4. Last Revealer | Commit-Reveal flaw | Information asymmetry in sequential reveal |
+| 5. Threshold Encryption | Defense layer 2 | Batch execution eliminates ordering advantages |
+| 6. Free Mode | Open sandbox | Full DEX operations without guided steps |
 
 Each scenario is semi-interactive: parameters are pre-filled but adjustable, with "Next Step" buttons to advance. Every step includes expandable math showing the full Uniswap V2 formula with actual numbers substituted in.
 
 ## Setup
 
-```bash
+```powershell
 # 1. Navigate to project directory
-cd dex-prototype
+cd DEX_simulator
 
 # 2. Create virtual environment (recommended)
 python -m venv venv
-source venv/bin/activate        # Linux/macOS
-# venv\Scripts\activate         # Windows
+venv\Scripts\activate          # Windows (PowerShell)
+# source venv/bin/activate     # Linux/macOS
 
 # 3. Install dependencies
-pip install -r requirements.txt
+pip install "setuptools<81"
+pip install --pre -r requirements.txt
 
-# 4. Set environment variable (Windows — required for eth-hash)
+# 4. Set environment variable (required for eth-hash on Windows)
 # PowerShell:
 $env:ETH_HASH_BACKEND = "pycryptodome"
 # CMD:
-set ETH_HASH_BACKEND=pycryptodome
+# set ETH_HASH_BACKEND=pycryptodome
 # Linux/macOS:
-export ETH_HASH_BACKEND=pycryptodome
+# export ETH_HASH_BACKEND=pycryptodome
 
 # 5. Run
-streamlit run frontend/app.py
+streamlit run app.py
 ```
 
 First launch takes ~5 seconds (compiling 5 Solidity contracts + deploying to in-memory EVM).
 
-## Login
+## Usage
 
-The simulator uses **private key login** for educational purposes. On the login page, you'll see pre-funded test accounts (Alice, Bob, Carol, Dave, Eve) with their private keys displayed. Copy any key and paste it to log in.
+1. Open the app in your browser (Streamlit auto-opens at `http://localhost:8501`).
+2. From the overview page, pick a scenario (Modes 1–6).
+3. Modes 2–5 are guided tutorials and **do not require login**; they auto-seed the pool with 10,000 TKA + 10,000 TKB if empty.
+4. Modes 1 and 6 require you to select a test account (Alice / Bob / Carol / Dave / Eve).
 
-**These are test-only keys on a local in-memory EVM. They have zero real-world value.**
+**All accounts are test-only on a local in-memory EVM and have zero real-world value.**
 
 ## Project Structure
 
 ```
-dex-prototype/
-├── contracts/
-│   ├── TokenA.sol              # ERC-20 Token A
-│   ├── TokenB.sol              # ERC-20 Token B
-│   ├── SimpleDEX.sol           # Basic constant-product AMM
-│   ├── CommitRevealDEX.sol     # AMM + commit-reveal swap mechanism
-│   └── ThresholdDEX.sol        # AMM + batch encrypted execution
-├── backend/
-│   ├── compile.py              # py-solc-x compilation
-│   ├── chain.py                # eth-tester EVM session
-│   ├── accounts.py             # Account name ↔ address mapping
-│   └── dex_client.py           # Python wrappers for all 3 DEX contracts
-├── frontend/
-│   └── app.py                  # Streamlit UI (all 6 modes)
+DEX_simulator/
+├── TokenA.sol              # ERC-20 Token A
+├── TokenB.sol              # ERC-20 Token B
+├── SimpleDEX.sol           # Basic constant-product AMM
+├── CommitRevealDEX.sol     # AMM + commit-reveal swap mechanism
+├── ThresholdDEX.sol        # AMM + batch encrypted execution
+├── app.py                  # Streamlit UI (all 6 modes)
+├── chain.py                # eth-tester EVM session
+├── compile.py              # py-solc-x compilation helper
+├── accounts.py             # Account name ↔ address mapping
+├── dex_client.py           # Python wrappers for all 3 DEX contracts
 ├── requirements.txt
+├── .gitignore
 └── README.md
 ```
 
