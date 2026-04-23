@@ -1,0 +1,9 @@
+setuptools>=68.0.0,<81
+web3>=6.0.0,<7.0.0
+eth-tester>=0.13.0b1
+py-evm>=0.12.0b2
+eth-hash[pycryptodome]>=0.1.4,<1.0.0
+py-solc-x>=2.0.0
+streamlit>=1.30.0
+eth-account>=0.12.3
+pycryptodome>=3.20.0
