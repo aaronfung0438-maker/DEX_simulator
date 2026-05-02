@@ -41,6 +41,33 @@ def show_math(label, formula, values, result):
         st.success(f"Result: {result}")
 
 
+def show_tx_receipt(result: dict, contract_name: str, fn_name: str, event_key: str = "logs_parsed"):
+    """Show EVM transaction receipt — proves the Solidity function actually ran on-chain."""
+    tx_hash = result.get("tx_hash", "")
+    block_num = result.get("block_number", "?")
+    gas_used = result.get("gas_used", "?")
+    logs = result.get(event_key, [])
+
+    with st.expander("🔗 EVM Transaction Receipt  ← Solidity actually ran this"):
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Block #", block_num)
+        col2.metric("Gas Used", f"{gas_used:,}" if isinstance(gas_used, int) else gas_used)
+        col3.metric("Contract", contract_name)
+
+        st.caption(f"Function called: `{contract_name}.{fn_name}(...)`")
+        st.code(f"tx hash: {tx_hash}", language="text")
+
+        if logs:
+            st.markdown("**Events emitted by Solidity:**")
+            for log in logs:
+                formatted = {
+                    k: (f"{v / 1e18:,.4f} tokens" if isinstance(v, int) and v > 10**15 else
+                        (f"0x{v.hex()}" if isinstance(v, (bytes, bytearray)) else v))
+                    for k, v in log.items()
+                }
+                st.json(formatted)
+
+
 def show_pool_state(client, label="Current Pool State"):
     """Display pool reserves, k, spot price."""
     ra, rb = client.get_reserves()
@@ -295,21 +322,42 @@ def mode_simple_dex():
 
             if st.button("Alice: Seed Pool ➡️", type="primary", key="s1_exec_1"):
                 alice = address_of(chain, "Alice")
-                result = dex.add_liquidity(alice, to_w(amt_a), to_w(amt_b))
-                shares = result["logs_parsed"][0]["sharesMinted"] if result["logs_parsed"] else 0
+                ra_pre, rb_pre = dex.get_reserves()
 
-                show_math(
-                    "LP Shares (first deposit)",
-                    "shares = sqrt(x · y)",
-                    f"shares = sqrt({amt_a:,.0f} × {amt_b:,.0f}) = {to_h(shares):,.4f}",
-                    f"{to_h(shares):,.4f} LP shares minted"
-                )
+                if ra_pre > 0 and rb_pre > 0:
+                    # Pool already seeded by another mode — skip add_liquidity to avoid ratio mismatch.
+                    ra_h, rb_h = to_h(ra_pre), to_h(rb_pre)
+                    st.info(
+                        f"Pool already has reserves ({ra_h:,.2f} TKA / {rb_h:,.2f} TKB) from a previous scenario. "
+                        "Skipping deposit and using existing pool."
+                    )
+                    show_math(
+                        "LP Shares (pool already seeded)",
+                        "shares = sqrt(x · y)",
+                        f"Using existing pool: {ra_h:,.2f} TKA × {rb_h:,.2f} TKB",
+                        f"Pool live — k = {ra_h * rb_h:,.0f}"
+                    )
+                    st.session_state.s1_seed = {"a": ra_h, "b": rb_h}
+                    guided_after_tx(chain, "s1_stack")
+                    st.session_state.s1_step = 2
+                    st.rerun()
+                else:
+                    result = dex.add_liquidity(alice, to_w(amt_a), to_w(amt_b))
+                    shares = result["logs_parsed"][0]["sharesMinted"] if result["logs_parsed"] else 0
 
-                add_tx("⚪ Seed Pool", "Alice", f"{amt_a:,.0f} TKA + {amt_b:,.0f} TKB", result["new_reserves"])
-                st.session_state.s1_seed = {"a": float(amt_a), "b": float(amt_b)}
-                guided_after_tx(chain, "s1_stack")
-                st.session_state.s1_step = 2
-                st.rerun()
+                    show_math(
+                        "LP Shares (first deposit)",
+                        "shares = sqrt(x · y)",
+                        f"shares = sqrt({amt_a:,.0f} × {amt_b:,.0f}) = {to_h(shares):,.4f}",
+                        f"{to_h(shares):,.4f} LP shares minted"
+                    )
+                    show_tx_receipt(result, "SimpleDEX", "addLiquidity")
+
+                    add_tx("⚪ Seed Pool", "Alice", f"{amt_a:,.0f} TKA + {amt_b:,.0f} TKB", result["new_reserves"])
+                    st.session_state.s1_seed = {"a": float(amt_a), "b": float(amt_b)}
+                    guided_after_tx(chain, "s1_stack")
+                    st.session_state.s1_step = 2
+                    st.rerun()
 
         elif step == 2:
             st.markdown("### Step 2: Bob Swaps TokenA → TokenB")
@@ -348,6 +396,7 @@ def mode_simple_dex():
                 bob = address_of(chain, "Bob")
                 result = dex.swap(bob, dex.token_a_address, to_w(amt_in), 0)
                 actual_out = result["logs_parsed"][0]["amountOut"] if result["logs_parsed"] else 0
+                show_tx_receipt(result, "SimpleDEX", "swap")
                 add_tx("⚪ Swap", "Bob", f"{amt_in:,.0f} TKA → {to_h(actual_out):,.4f} TKB", result["new_reserves"])
                 guided_after_tx(chain, "s1_stack")
                 st.session_state.s1_step = 3
@@ -369,6 +418,7 @@ def mode_simple_dex():
                 carol = address_of(chain, "Carol")
                 result = dex.swap(carol, dex.token_b_address, to_w(amt_in), 0)
                 actual_out = result["logs_parsed"][0]["amountOut"] if result["logs_parsed"] else 0
+                show_tx_receipt(result, "SimpleDEX", "swap")
                 add_tx("⚪ Swap", "Carol", f"{amt_in:,.0f} TKB → {to_h(actual_out):,.4f} TKA", result["new_reserves"])
                 guided_after_tx(chain, "s1_stack")
                 st.session_state.s1_step = 4
@@ -414,6 +464,7 @@ def mode_simple_dex():
 
             if st.button("Alice: Remove 50% Liquidity ➡️", type="primary", key="s1_exec_4"):
                 result = dex.remove_liquidity(alice, half_shares)
+                show_tx_receipt(result, "SimpleDEX", "removeLiquidity")
                 add_tx("⚪ Remove", "Alice", f"Removed {to_h(half_shares):,.4f} shares", result["new_reserves"])
                 guided_after_tx(chain, "s1_stack")
                 st.success("✅ Mode 1 Complete! The pool state carries forward to Mode 2.")

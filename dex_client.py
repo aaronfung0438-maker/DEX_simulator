@@ -50,6 +50,7 @@ class DexClient:
         new_ra, new_rb = self.get_reserves()
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
             "new_reserves": (new_ra, new_rb),
@@ -64,6 +65,7 @@ class DexClient:
         new_ra, new_rb = self.get_reserves()
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
             "new_reserves": (new_ra, new_rb),
@@ -83,6 +85,7 @@ class DexClient:
         new_ra, new_rb = self.get_reserves()
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
             "new_reserves": (new_ra, new_rb),
@@ -144,6 +147,7 @@ class CommitRevealDexClient:
         new_ra, new_rb = self.get_reserves()
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
             "new_reserves": (new_ra, new_rb),
@@ -164,6 +168,7 @@ class CommitRevealDexClient:
         new_ra, new_rb = self.get_reserves()
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
             "new_reserves": (new_ra, new_rb),
@@ -175,6 +180,7 @@ class CommitRevealDexClient:
         logs = self.dex.events.SwapCommitted().process_receipt(receipt)
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
         }
@@ -196,6 +202,7 @@ class CommitRevealDexClient:
         new_ra, new_rb = self.get_reserves()
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
             "new_reserves": (new_ra, new_rb),
@@ -258,6 +265,7 @@ class ThresholdDexClient:
         new_ra, new_rb = self.get_reserves()
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
             "new_reserves": (new_ra, new_rb),
@@ -269,6 +277,7 @@ class ThresholdDexClient:
         logs = self.dex.events.OrderSubmitted().process_receipt(receipt)
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "logs_parsed": [dict(log.args) for log in logs],
         }
@@ -276,7 +285,11 @@ class ThresholdDexClient:
     def close_submission_window(self, from_addr: str) -> dict:
         tx = self.dex.functions.closeSubmissionWindow().transact({"from": from_addr})
         receipt = self.w3.eth.wait_for_transaction_receipt(tx)
-        return {"tx_hash": receipt.transactionHash.hex(), "gas_used": receipt.gasUsed}
+        return {
+            "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
+            "gas_used": receipt.gasUsed,
+        }
 
     def batch_decrypt_and_execute(
         self,
@@ -305,6 +318,7 @@ class ThresholdDexClient:
 
         return {
             "tx_hash": receipt.transactionHash.hex(),
+            "block_number": receipt.blockNumber,
             "gas_used": receipt.gasUsed,
             "batch_logs": [dict(log.args) for log in batch_logs],
             "exec_logs": [dict(log.args) for log in exec_logs],
