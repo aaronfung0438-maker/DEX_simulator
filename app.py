@@ -41,31 +41,45 @@ def show_math(label, formula, values, result):
         st.success(f"Result: {result}")
 
 
-def show_tx_receipt(result: dict, contract_name: str, fn_name: str, event_key: str = "logs_parsed"):
-    """Show EVM transaction receipt — proves the Solidity function actually ran on-chain."""
-    tx_hash = result.get("tx_hash", "")
-    block_num = result.get("block_number", "?")
-    gas_used = result.get("gas_used", "?")
+def save_tx_receipt(result: dict, contract_name: str, fn_name: str, event_key: str = "logs_parsed"):
+    """Store tx receipt in session state so the next page render can display it."""
     logs = result.get(event_key, [])
+    formatted_logs = []
+    for log in logs:
+        formatted_logs.append({
+            k: (f"{v / 1e18:,.4f} tokens" if isinstance(v, int) and v > 10**15 else
+                (f"0x{v.hex()}" if isinstance(v, (bytes, bytearray)) else v))
+            for k, v in log.items()
+        })
+    st.session_state.last_tx_receipt = {
+        "tx_hash": result.get("tx_hash", ""),
+        "block_number": result.get("block_number", "?"),
+        "gas_used": result.get("gas_used", "?"),
+        "contract": contract_name,
+        "function": fn_name,
+        "logs": formatted_logs,
+    }
 
-    with st.expander("🔗 EVM Transaction Receipt  ← Solidity actually ran this"):
+
+def render_last_receipt():
+    """Display the saved receipt from the previous step (if any), then clear it."""
+    rcpt = st.session_state.pop("last_tx_receipt", None)
+    if not rcpt:
+        return
+    with st.expander("🔗 Previous Transaction Receipt  — Solidity ran this on-chain", expanded=True):
         col1, col2, col3 = st.columns(3)
-        col1.metric("Block #", block_num)
-        col2.metric("Gas Used", f"{gas_used:,}" if isinstance(gas_used, int) else gas_used)
-        col3.metric("Contract", contract_name)
+        col1.metric("Block #", rcpt["block_number"])
+        gas = rcpt["gas_used"]
+        col2.metric("Gas Used", f"{gas:,}" if isinstance(gas, int) else gas)
+        col3.metric("Contract", rcpt["contract"])
 
-        st.caption(f"Function called: `{contract_name}.{fn_name}(...)`")
-        st.code(f"tx hash: {tx_hash}", language="text")
+        st.caption(f"Function called: `{rcpt['contract']}.{rcpt['function']}(...)`")
+        st.code(f"tx hash: {rcpt['tx_hash']}", language="text")
 
-        if logs:
+        if rcpt["logs"]:
             st.markdown("**Events emitted by Solidity:**")
-            for log in logs:
-                formatted = {
-                    k: (f"{v / 1e18:,.4f} tokens" if isinstance(v, int) and v > 10**15 else
-                        (f"0x{v.hex()}" if isinstance(v, (bytes, bytearray)) else v))
-                    for k, v in log.items()
-                }
-                st.json(formatted)
+            for log in rcpt["logs"]:
+                st.json(log)
 
 
 def show_pool_state(client, label="Current Pool State"):
@@ -297,6 +311,8 @@ def mode_simple_dex():
         render_guided_nav(chain, "s1_step", "s1_stack", step, reset_mode_1)
 
     with col_l:
+        render_last_receipt()
+
         if step == 0:
             st.markdown("### Welcome to the DEX Simulator!")
             st.markdown(
@@ -351,7 +367,7 @@ def mode_simple_dex():
                         f"shares = sqrt({amt_a:,.0f} × {amt_b:,.0f}) = {to_h(shares):,.4f}",
                         f"{to_h(shares):,.4f} LP shares minted"
                     )
-                    show_tx_receipt(result, "SimpleDEX", "addLiquidity")
+                    save_tx_receipt(result, "SimpleDEX", "addLiquidity")
 
                     add_tx("⚪ Seed Pool", "Alice", f"{amt_a:,.0f} TKA + {amt_b:,.0f} TKB", result["new_reserves"])
                     st.session_state.s1_seed = {"a": float(amt_a), "b": float(amt_b)}
@@ -396,7 +412,7 @@ def mode_simple_dex():
                 bob = address_of(chain, "Bob")
                 result = dex.swap(bob, dex.token_a_address, to_w(amt_in), 0)
                 actual_out = result["logs_parsed"][0]["amountOut"] if result["logs_parsed"] else 0
-                show_tx_receipt(result, "SimpleDEX", "swap")
+                save_tx_receipt(result, "SimpleDEX", "swap")
                 add_tx("⚪ Swap", "Bob", f"{amt_in:,.0f} TKA → {to_h(actual_out):,.4f} TKB", result["new_reserves"])
                 guided_after_tx(chain, "s1_stack")
                 st.session_state.s1_step = 3
@@ -418,7 +434,7 @@ def mode_simple_dex():
                 carol = address_of(chain, "Carol")
                 result = dex.swap(carol, dex.token_b_address, to_w(amt_in), 0)
                 actual_out = result["logs_parsed"][0]["amountOut"] if result["logs_parsed"] else 0
-                show_tx_receipt(result, "SimpleDEX", "swap")
+                save_tx_receipt(result, "SimpleDEX", "swap")
                 add_tx("⚪ Swap", "Carol", f"{amt_in:,.0f} TKB → {to_h(actual_out):,.4f} TKA", result["new_reserves"])
                 guided_after_tx(chain, "s1_stack")
                 st.session_state.s1_step = 4
@@ -464,11 +480,38 @@ def mode_simple_dex():
 
             if st.button("Alice: Remove 50% Liquidity ➡️", type="primary", key="s1_exec_4"):
                 result = dex.remove_liquidity(alice, half_shares)
-                show_tx_receipt(result, "SimpleDEX", "removeLiquidity")
+                save_tx_receipt(result, "SimpleDEX", "removeLiquidity")
                 add_tx("⚪ Remove", "Alice", f"Removed {to_h(half_shares):,.4f} shares", result["new_reserves"])
                 guided_after_tx(chain, "s1_stack")
-                st.success("✅ Mode 1 Complete! The pool state carries forward to Mode 2.")
+                st.session_state.s1_step = 5
                 st.rerun()
+
+        elif step == 5:
+            st.markdown("### Mode 1 Complete!")
+            st.success("You've learned the basics of a constant-product AMM: pool creation, swaps, price impact, and LP fee earnings.")
+
+            show_pool_state(dex, "Final Pool State")
+
+            st.markdown("---")
+            st.markdown("**What's next?** In Mode 2, you'll see how an attacker exploits the public mempool to **sandwich** a victim's trade for profit.")
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button("Continue to Mode 2 ➡️", type="primary", key="s1_goto_m2"):
+                    st.session_state.current_mode = "2"
+                    st.session_state.current_user = None
+                    st.session_state.current_user_name = None
+                    st.session_state.s2_stack = []
+                    st.session_state.s2_step = 0
+                    st.session_state.s2_data = {}
+                    st.rerun()
+            with c2:
+                if st.button("🔄 Replay Mode 1", key="s1_replay"):
+                    reset_mode_1()
+            with c3:
+                if st.button("Back to Overview", key="s1_to_ov"):
+                    st.session_state.current_mode = None
+                    st.rerun()
 
 
 # ---------------------------------------------------------------------------
